@@ -1,0 +1,8 @@
+{
+  "name": "الأجندة القضائية",
+  "description": "تطبيق الأجندة القضائية المصرية لتنظيم الجلسات اليومية والتوكيلات وأوراق المحضرين والأعمال الإدارية للمحامين.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
