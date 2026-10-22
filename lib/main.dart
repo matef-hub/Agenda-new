@@ -1,4 +1,4 @@
-﻿import 'dart:io' show Platform;
+import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -12,11 +12,13 @@ import 'features/powers_of_attorney/presentation/screens/powers_of_attorney_scre
 import 'features/bailiffs/presentation/screens/bailiffs_screen.dart';
 import 'features/admin_work/presentation/screens/admin_work_screen.dart';
 
-// إصلاح مشكلة SQLite على الويب
+// إصلاح مشكلة SQLite على الويب وسطح المكتب
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:sqflite_common_ffi_web/sqflite_ffi_web.dart';
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+
   // تهيئة قاعدة البيانات لجميع المنصات
   if (kIsWeb) {
     // استخدام SQLite Web FFI للويب
@@ -57,7 +59,7 @@ class MyApp extends StatelessWidget {
   }
 }
 
-/// الواجهة الرئيسية الجديدة - تصميم نقي بالإيماءات
+/// الواجهة الرئيسية - تجمع بين السحب بالإيماءات وشريط التنقل السفلي الواضح
 class JudicialAgendaShell extends StatefulWidget {
   const JudicialAgendaShell({super.key});
 
@@ -69,8 +71,9 @@ class _JudicialAgendaShellState extends State<JudicialAgendaShell>
     with SingleTickerProviderStateMixin {
   late final PageController _pageController;
   int _currentIndex = 0;
+  bool _isAnimatingToPage = false;
 
-  final List<String> _titles = [
+  final List<String> _titles = const [
     'الجلسات اليومية',
     'البيانات الشخصية',
     'التوكيلات',
@@ -78,12 +81,12 @@ class _JudicialAgendaShellState extends State<JudicialAgendaShell>
     'الأعمال الإدارية',
   ];
 
-  final List<Widget> _screens = [
-    const DailyScheduleScreen(),
-    const PersonalDataScreen(),
-    const PowersOfAttorneyScreen(),
-    const BailiffsScreen(),
-    const AdminWorkScreen(),
+  final List<Widget> _screens = const [
+    DailyScheduleScreen(),
+    PersonalDataScreen(),
+    PowersOfAttorneyScreen(),
+    BailiffsScreen(),
+    AdminWorkScreen(),
   ];
 
   @override
@@ -98,13 +101,23 @@ class _JudicialAgendaShellState extends State<JudicialAgendaShell>
     super.dispose();
   }
 
-  void _navigateToPage(int index) {
-    setState(() => _currentIndex = index);
-    _pageController.animateToPage(
-      index,
-      duration: const Duration(milliseconds: 400),
-      curve: Curves.easeInOutCubic,
-    );
+  Future<void> _navigateToPage(int index) async {
+    if (index < 0 || index >= _screens.length || index == _currentIndex) return;
+    setState(() {
+      _currentIndex = index;
+      _isAnimatingToPage = true;
+    });
+    try {
+      await _pageController.animateToPage(
+        index,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOutCubic,
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isAnimatingToPage = false);
+      }
+    }
   }
 
   @override
@@ -116,25 +129,73 @@ class _JudicialAgendaShellState extends State<JudicialAgendaShell>
           children: [
             // شريط العنوان الأنيق
             _buildMinimalistHeader(),
-            
+
             // التنقل بالإيماءات (Swipe)
             Expanded(
               child: PageView(
                 controller: _pageController,
-                onPageChanged: (index) => setState(() => _currentIndex = index),
+                onPageChanged: (index) {
+                  if (!_isAnimatingToPage && _currentIndex != index) {
+                    setState(() => _currentIndex = index);
+                  }
+                },
                 children: _screens,
               ),
             ),
-            
+
             // مؤشر الصفحات السفلي
             _buildPageIndicator(),
+          ],
+        ),
+      ),
+      bottomNavigationBar: Container(
+        decoration: const BoxDecoration(
+          border: Border(
+            top: BorderSide(color: AppColors.secondaryGold, width: 1.5),
+          ),
+        ),
+        child: BottomNavigationBar(
+          currentIndex: _currentIndex,
+          onTap: _navigateToPage,
+          type: BottomNavigationBarType.fixed,
+          backgroundColor: AppColors.paperCream,
+          selectedItemColor: AppColors.primaryOlive,
+          unselectedItemColor: AppColors.textLight,
+          selectedFontSize: 12,
+          unselectedFontSize: 11,
+          items: const [
+            BottomNavigationBarItem(
+              icon: Icon(Icons.calendar_today_outlined),
+              activeIcon: Icon(Icons.calendar_today),
+              label: 'اليومية',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.person_outline),
+              activeIcon: Icon(Icons.person),
+              label: 'البيانات',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.assignment_outlined),
+              activeIcon: Icon(Icons.assignment),
+              label: 'التوكيلات',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.description_outlined),
+              activeIcon: Icon(Icons.description),
+              label: 'المحضرين',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.checklist_rtl_outlined),
+              activeIcon: Icon(Icons.checklist_rtl),
+              label: 'إدارية',
+            ),
           ],
         ),
       ),
     );
   }
 
-  /// الهيدر النقي - بدون أزرار، فقط عنوان ومؤشرات تنقل خفية
+  /// الهيدر النقي - عنوان ومؤشرات تنقل
   Widget _buildMinimalistHeader() {
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
@@ -147,7 +208,7 @@ class _JudicialAgendaShellState extends State<JudicialAgendaShell>
                 width: 3,
                 height: 32,
                 decoration: BoxDecoration(
-                  gradient: LinearGradient(
+                  gradient: const LinearGradient(
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
                     colors: [
@@ -159,7 +220,7 @@ class _JudicialAgendaShellState extends State<JudicialAgendaShell>
                 ),
               ),
               const SizedBox(width: 12),
-              
+
               // العنوان بخط أميري
               Expanded(
                 child: Text(
@@ -175,9 +236,9 @@ class _JudicialAgendaShellState extends State<JudicialAgendaShell>
               ),
             ],
           ),
-          
+
           const SizedBox(height: 16),
-          
+
           // مؤشر التنقل السريع (نقاط قابلة للضغط)
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -203,7 +264,9 @@ class _JudicialAgendaShellState extends State<JudicialAgendaShell>
         width: isActive ? 24 : 8,
         height: 8,
         decoration: BoxDecoration(
-          color: isActive ? AppColors.primaryOlive : AppColors.primaryOlive.withOpacity(0.2),
+          color: isActive
+              ? AppColors.primaryOlive
+              : AppColors.primaryOlive.withOpacity(0.2),
           borderRadius: BorderRadius.circular(4),
         ),
       ),
@@ -213,7 +276,7 @@ class _JudicialAgendaShellState extends State<JudicialAgendaShell>
   /// مؤشر الصفحات السفلي (خط ذهبي رفيع)
   Widget _buildPageIndicator() {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12),
+      padding: const EdgeInsets.symmetric(vertical: 8),
       child: Container(
         width: 60,
         height: 2,

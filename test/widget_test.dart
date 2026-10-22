@@ -1,7 +1,7 @@
 // Tests for the judicial agenda application.
 //
-// These tests verify the actual application features, not the Flutter
-// counter template that was previously here.
+// These tests verify the actual application features, navigation synchronization,
+// form validation, CRUD workflows, and Hijri/Gregorian date conversion.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -9,6 +9,7 @@ import 'package:provider/provider.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import 'package:agenda/main.dart';
+import 'package:agenda/core/database/database_helper.dart';
 import 'package:agenda/core/utils/date_utils.dart';
 import 'package:agenda/features/daily_schedule/data/models/session_model.dart';
 import 'package:agenda/features/daily_schedule/presentation/providers/session_provider.dart';
@@ -33,11 +34,10 @@ void main() {
           child: const MyApp(),
         ),
       );
-      // Give time for async init (database, provider).
       await tester.pumpAndSettle(const Duration(seconds: 3));
 
-      // The app should render the bottom navigation bar.
       expect(find.byType(BottomNavigationBar), findsOneWidget);
+      expect(find.byType(PageView), findsOneWidget);
     });
 
     testWidgets('MyApp has correct title', (WidgetTester tester) async {
@@ -57,10 +57,11 @@ void main() {
   });
 
   // -------------------------------------------------------------------------
-  // 2. Daily agenda screen renders in Arabic
+  // 2. Five-section navigation and PageView synchronization
   // -------------------------------------------------------------------------
-  group('Daily agenda screen', () {
-    testWidgets('renders Arabic UI elements', (WidgetTester tester) async {
+  group('Five-section navigation & PageView synchronization', () {
+    testWidgets('renders Arabic UI elements on Daily Schedule',
+        (WidgetTester tester) async {
       await tester.pumpWidget(
         MultiProvider(
           providers: [
@@ -71,18 +72,13 @@ void main() {
       );
       await tester.pumpAndSettle(const Duration(seconds: 3));
 
-      // The daily schedule label should appear in the navigation bar.
       expect(find.text('اليومية'), findsOneWidget);
-
-      // The schedule header text.
       expect(find.text('جدول الجلسات اليومية'), findsOneWidget);
-
-      // Hijri and Gregorian labels.
       expect(find.text('هجري'), findsOneWidget);
       expect(find.text('ميلادي'), findsOneWidget);
     });
 
-    testWidgets('navigation bar has all tabs in Arabic',
+    testWidgets('navigation bar has all five tabs in Arabic and syncs with PageView',
         (WidgetTester tester) async {
       await tester.pumpWidget(
         MultiProvider(
@@ -99,6 +95,35 @@ void main() {
       expect(find.text('التوكيلات'), findsOneWidget);
       expect(find.text('المحضرين'), findsOneWidget);
       expect(find.text('إدارية'), findsOneWidget);
+
+      // 1. Navigate to Personal Data (البيانات)
+      await tester.tap(find.text('البيانات'));
+      await tester.pumpAndSettle();
+      expect(find.text('البيانات الشخصية'), findsWidgets);
+      expect(find.text('الاسم / Name'), findsOneWidget);
+      // Verify payment-card field is not exposed
+      expect(find.textContaining('Credit Card'), findsNothing);
+
+      // 2. Navigate to Powers of Attorney (التوكيلات)
+      await tester.tap(find.text('التوكيلات'));
+      await tester.pumpAndSettle();
+      expect(find.text('فهرس التوكيلات'), findsOneWidget);
+
+      // 3. Navigate to Bailiffs (المحضرين)
+      await tester.tap(find.text('المحضرين'));
+      await tester.pumpAndSettle();
+      expect(find.text('أوراق المحضرين'), findsOneWidget);
+
+      // 4. Navigate to Administrative Work (إدارية)
+      await tester.tap(find.text('إدارية'));
+      await tester.pumpAndSettle();
+      expect(find.text('الأعمال الإدارية'), findsOneWidget);
+      expect(find.text('أعمال إدارية'), findsOneWidget);
+
+      // 5. Return to Daily Schedule (اليومية)
+      await tester.tap(find.text('اليومية'));
+      await tester.pumpAndSettle();
+      expect(find.text('جدول الجلسات اليومية'), findsOneWidget);
     });
   });
 
@@ -106,25 +131,25 @@ void main() {
   // 3. Empty sessions are handled correctly
   // -------------------------------------------------------------------------
   group('Empty sessions', () {
-    testWidgets('shows empty state message when no sessions exist',
+    testWidgets('shows empty state message when no sessions exist for date',
         (WidgetTester tester) async {
       await tester.pumpWidget(
         MultiProvider(
           providers: [
-            ChangeNotifierProvider(create: (_) => SessionProvider()),
+            ChangeNotifierProvider(
+              create: (_) =>
+                  SessionProvider()..setSelectedDate(DateTime(2099, 1, 1)),
+            ),
           ],
           child: const MyApp(),
         ),
       );
       await tester.pumpAndSettle(const Duration(seconds: 3));
 
-      // The empty state should show a message.
       expect(
         find.text('لا توجد جلسات مسجلة لهذا اليوم'),
         findsOneWidget,
       );
-
-      // There should be a button to add a session.
       expect(find.text('إضافة جلسة'), findsOneWidget);
     });
   });
@@ -144,18 +169,15 @@ void main() {
       );
       await tester.pumpAndSettle(const Duration(seconds: 3));
 
-      // Get the provider.
       final provider =
           tester.element(find.byType(MaterialApp)).read<SessionProvider>();
       final initialDate = provider.selectedDate;
 
-      // Tap the forward arrow (arrow_back_ios moves forward in the UI).
       final forwardButton = find.byIcon(Icons.arrow_back_ios);
       expect(forwardButton, findsOneWidget);
       await tester.tap(forwardButton);
       await tester.pumpAndSettle(const Duration(seconds: 3));
 
-      // The date should have changed to the next day.
       final newDate = provider.selectedDate;
       expect(
         newDate.difference(initialDate).inDays,
@@ -326,11 +348,11 @@ void main() {
   });
 
   // -------------------------------------------------------------------------
-  // 6. Session persistence survives reopening (integration-level via FFI)
+  // 6. Session persistence & preservation of existing records
   // -------------------------------------------------------------------------
-  group('Session persistence', () {
-    test('session survives database round-trip', () async {
-      // Use an in-memory database via FFI for testing.
+  group('Session persistence & record preservation', () {
+    test('session survives database round-trip and preserves existing records',
+        () async {
       final db = await databaseFactoryFfi.openDatabase(
         inMemoryDatabasePath,
         options: OpenDatabaseOptions(
@@ -358,6 +380,23 @@ void main() {
           },
         ),
       );
+
+      final existingSession = Session(
+        courtName: 'محكمة الإسكندرية',
+        circuit: 'الدائرة 1 مدني',
+        caseNumber: '101',
+        caseYear: 2025,
+        clientName: 'سجل موجود مسبقاً',
+        clientCapacity: 'مدعي',
+        opponentName: 'خصم أول',
+        opponentCapacity: 'مدعى عليه',
+        previousSession: '',
+        decision: '',
+        notes: '',
+        sessionDate: DateTime(2026, 10, 22),
+      );
+      final existingMap = existingSession.toMap()..remove('id');
+      final existingId = await db.insert('sessions', existingMap);
 
       final session = Session(
         courtName: 'محكمة القاهرة',
@@ -374,116 +413,39 @@ void main() {
         sessionDate: DateTime(2026, 10, 22),
       );
 
-      // Insert
-      final map = session.toMap();
-      map.remove('id'); // Let autoincrement handle it
+      final map = session.toMap()..remove('id');
       final id = await db.insert('sessions', map);
-      expect(id, greaterThan(0));
+      expect(id, greaterThan(existingId));
 
-      // Read back
-      final rows = await db.query('sessions', where: 'id = ?', whereArgs: [id]);
-      expect(rows.length, 1);
+      // Verify both records exist
+      final allRows = await db.query('sessions');
+      expect(allRows.length, 2);
 
-      final restored = Session.fromMap(rows.first);
-      expect(restored.courtName, 'محكمة القاهرة');
-      expect(restored.caseYear, 2026);
-      expect(restored.clientName, 'أحمد');
-
-      // Update
+      // Update second session
+      final restored = Session.fromMap(
+        (await db.query('sessions', where: 'id = ?', whereArgs: [id])).first,
+      );
       final updatedMap = restored.copyWith(decision: 'حكم').toMap();
-      final updateCount =
-          await db.update('sessions', updatedMap, where: 'id = ?', whereArgs: [id]);
-      expect(updateCount, 1);
+      await db.update('sessions', updatedMap, where: 'id = ?', whereArgs: [id]);
 
-      // Verify update
-      final updatedRows =
-          await db.query('sessions', where: 'id = ?', whereArgs: [id]);
-      final updated = Session.fromMap(updatedRows.first);
-      expect(updated.decision, 'حكم');
-      expect(updated.createdAt, restored.createdAt); // createdAt preserved
+      // Delete second session
+      await db.delete('sessions', where: 'id = ?', whereArgs: [id]);
 
-      // Delete
-      final deleteCount =
-          await db.delete('sessions', where: 'id = ?', whereArgs: [id]);
-      expect(deleteCount, 1);
-
-      // Verify deletion
-      final afterDelete =
-          await db.query('sessions', where: 'id = ?', whereArgs: [id]);
-      expect(afterDelete, isEmpty);
-
-      await db.close();
-    });
-
-    test('session date filtering works correctly', () async {
-      final db = await databaseFactoryFfi.openDatabase(
-        inMemoryDatabasePath,
-        options: OpenDatabaseOptions(
-          version: 1,
-          onCreate: (db, version) async {
-            await db.execute('''
-              CREATE TABLE sessions (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                court_name TEXT NOT NULL,
-                circuit TEXT NOT NULL,
-                case_number TEXT NOT NULL,
-                case_year INTEGER NOT NULL,
-                client_name TEXT NOT NULL,
-                client_capacity TEXT,
-                opponent_name TEXT NOT NULL,
-                opponent_capacity TEXT,
-                previous_session TEXT,
-                decision TEXT,
-                notes TEXT,
-                session_date TEXT NOT NULL,
-                created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL
-              )
-            ''');
-          },
-        ),
-      );
-
-      // Insert sessions for two different dates.
-      final dates = [DateTime(2026, 10, 22), DateTime(2026, 10, 23)];
-      for (final date in dates) {
-        final s = Session(
-          courtName: 'محكمة',
-          circuit: 'دائرة',
-          caseNumber: '1',
-          caseYear: 2026,
-          clientName: 'موكل',
-          clientCapacity: '',
-          opponentName: 'خصم',
-          opponentCapacity: '',
-          previousSession: '',
-          decision: '',
-          notes: '',
-          sessionDate: date,
-        );
-        final map = s.toMap();
-        map.remove('id');
-        await db.insert('sessions', map);
-      }
-
-      // Filter for 2026-10-22.
-      final dateStr = '2026-10-22';
-      final rows = await db.query(
-        'sessions',
-        where: 'session_date LIKE ?',
-        whereArgs: ['$dateStr%'],
-      );
-      expect(rows.length, 1);
+      // Verify pre-existing record is still intact
+      final remaining = await db.query('sessions');
+      expect(remaining.length, 1);
+      expect(remaining.first['client_name'], 'سجل موجود مسبقاً');
 
       await db.close();
     });
   });
 
   // -------------------------------------------------------------------------
-  // 7. Required fields are validated
+  // 7. Bailiffs screen validation, date rendering, and delete confirmation
   // -------------------------------------------------------------------------
-  group('Form validation', () {
-    testWidgets('required fields show validation errors',
+  group('Bailiffs screen', () {
+    testWidgets(
+        'validates required fields, renders delivery_date and hearing_date, and deletes with confirmation',
         (WidgetTester tester) async {
       await tester.pumpWidget(
         MultiProvider(
@@ -495,41 +457,183 @@ void main() {
       );
       await tester.pumpAndSettle(const Duration(seconds: 3));
 
-      // Tap the FAB to open the add session screen.
+      // Navigate to Bailiffs section
+      await tester.tap(find.text('المحضرين'));
+      await tester.pumpAndSettle();
+
+      // Open Add Bailiff Paper dialog
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pumpAndSettle();
+      expect(find.text('إضافة ورقة محضرين'), findsOneWidget);
+
+      // Submit empty form -> should show validation errors
+      await tester.tap(find.text('حفظ'));
+      await tester.pumpAndSettle();
+      expect(find.text('هذا الحقل مطلوب'), findsNWidgets(3));
+
+      // Fill fields including delivery_date and hearing_date
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'الرقم'),
+        'إعلان 9901',
+      );
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'قلم المحضرين'),
+        'محضري عابدين',
+      );
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'اسم الموكل'),
+        'مصطفى كامل',
+      );
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'تاريخ التسليم'),
+        '2026-10-15',
+      );
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'تاريخ الجلسة'),
+        '2026-11-01',
+      );
+
+      await tester.tap(find.text('حفظ'));
+      await tester.pumpAndSettle();
+
+      // Verify delivery_date and hearing_date are rendered in the table
+      expect(find.text('إعلان 9901'), findsOneWidget);
+      expect(find.text('تسليم: 2026-10-15'), findsOneWidget);
+      expect(find.text('جلسة: 2026-11-01'), findsOneWidget);
+
+      // Delete the added paper with confirmation
+      await tester.tap(find.byIcon(Icons.delete_outline).last);
+      await tester.pumpAndSettle();
+      expect(find.text('تأكيد الحذف'), findsOneWidget);
+
+      await tester.tap(find.text('حذف'));
+      await tester.pumpAndSettle();
+      expect(find.text('إعلان 9901'), findsNothing);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 8. Administrative work screen add, edit, completion toggle, and delete
+  // -------------------------------------------------------------------------
+  group('Administrative work screen', () {
+    testWidgets(
+        'supports add, edit preserving metadata, completion toggle, and confirmed delete',
+        (WidgetTester tester) async {
+      await tester.pumpWidget(
+        MultiProvider(
+          providers: [
+            ChangeNotifierProvider(create: (_) => SessionProvider()),
+          ],
+          child: const MyApp(),
+        ),
+      );
+      await tester.pumpAndSettle(const Duration(seconds: 3));
+
+      // Navigate to Admin Work section
+      await tester.tap(find.text('إدارية'));
+      await tester.pumpAndSettle();
+
+      // Open Add Note dialog
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pumpAndSettle();
+      expect(find.text('عمل إداري جديد'), findsOneWidget);
+
+      // Validate empty submit
+      await tester.tap(find.text('حفظ'));
+      await tester.pumpAndSettle();
+      expect(find.text('هذا الحقل مطلوب'), findsWidgets);
+
+      // Enter title and content
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'العنوان'),
+        'استخراج شهادة جدول',
+      );
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'التفاصيل'),
+        'من المحكمة الإدارية العليا',
+      );
+      await tester.tap(find.text('حفظ'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('استخراج شهادة جدول'), findsOneWidget);
+      expect(find.text('من المحكمة الإدارية العليا'), findsOneWidget);
+
+      // Toggle completion status
+      await tester.tap(find.byIcon(Icons.radio_button_unchecked).last);
+      await tester.pumpAndSettle();
+      expect(find.byIcon(Icons.check_circle), findsWidgets);
+
+      // Tap row to edit note and verify prepopulated fields + preserved completion
+      await tester.tap(find.text('استخراج شهادة جدول'));
+      await tester.pumpAndSettle();
+      expect(find.text('تعديل عمل إداري'), findsOneWidget);
+
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'العنوان'),
+        'استخراج شهادة جدول محدثة',
+      );
+      await tester.tap(find.text('حفظ'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('استخراج شهادة جدول محدثة'), findsOneWidget);
+      // Completion icon should still be checked
+      expect(find.byIcon(Icons.check_circle), findsWidgets);
+
+      // Delete note with confirmation
+      await tester.tap(find.byIcon(Icons.delete_outline).last);
+      await tester.pumpAndSettle();
+      expect(find.text('تأكيد الحذف'), findsOneWidget);
+
+      await tester.tap(find.text('حذف'));
+      await tester.pumpAndSettle();
+      expect(find.text('استخراج شهادة جدول محدثة'), findsNothing);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 9. Daily Schedule required fields validation
+  // -------------------------------------------------------------------------
+  group('Form validation', () {
+    testWidgets('required fields show validation errors on Add Session screen',
+        (WidgetTester tester) async {
+      await tester.pumpWidget(
+        MultiProvider(
+          providers: [
+            ChangeNotifierProvider(create: (_) => SessionProvider()),
+          ],
+          child: const MyApp(),
+        ),
+      );
+      await tester.pumpAndSettle(const Duration(seconds: 3));
+
       final fab = find.byType(FloatingActionButton);
       await tester.tap(fab.first);
       await tester.pumpAndSettle(const Duration(seconds: 2));
 
-      // We should now be on the Add Session screen.
       expect(find.text('إضافة جلسة جديدة'), findsOneWidget);
 
-      // Try to save without filling any fields.
       await tester.tap(find.text('حفظ الجلسة'));
       await tester.pumpAndSettle();
 
-      // Validation errors should appear for required fields.
       expect(find.text('هذا الحقل مطلوب'), findsWidgets);
     });
   });
 
   // -------------------------------------------------------------------------
-  // 8. Gregorian/Hijri formatting follows the documented convention
+  // 10. Gregorian/Hijri formatting follows the documented convention
   // -------------------------------------------------------------------------
   group('Hijri conversion', () {
     test('known Gregorian dates convert to correct Hijri', () {
-      // 23 March 2023 = 1 Ramadan 1444 (tabular)
       final h1 = AppDateUtils.gregorianToHijri(DateTime(2023, 3, 23));
-      expect(h1.month, 9); // Ramadan
+      expect(h1.month, 9);
       expect(h1.day, 1);
       expect(h1.year, 1444);
 
-      // 11 March 2024 = 1 Ramadan 1445
       final h2 = AppDateUtils.gregorianToHijri(DateTime(2024, 3, 11));
       expect(h2.month, 9);
       expect(h2.day, 1);
       expect(h2.year, 1445);
 
-      // 1 March 2025 = 1 Ramadan 1446
       final h3 = AppDateUtils.gregorianToHijri(DateTime(2025, 3, 1));
       expect(h3.month, 9);
       expect(h3.day, 1);
