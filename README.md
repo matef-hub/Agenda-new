@@ -1,73 +1,32 @@
-# الأجندة القضائية (Egyptian Judicial Agenda)
+<div align="center"><img src="https://raw.githubusercontent.com/matef-hub/atefdodo/main/assets/research-signal.svg" width="100%" alt="Research · verified data · applied AI" /></div>
 
-تطبيق موبايل احترافي مصمم خصيصاً للمحامين المصريين، يحاكي الأجندة القضائية الورقية التقليدية بتصميمها المميز (اللون الزيتي، الذهبي، وقوام ورق الكريمة) مع توفير أدوات رقمية لتنظيم الجلسات والتوكيلات وأعمال المحضرين.
+# الأجندة القضائية — Judicial Agenda Lab
 
-## ✨ المميزات الرئيسية
+**A development workspace combining a Flutter mobile codebase and a React/TypeScript UI preview.**
 
-- **جدول الجلسات اليومي:** عرض كثيف للمعلومات يشمل المحكمة، الدائرة، رقم الدعوى، الموكل، الخصم، والقرارات.
-- **دعم التقويم الهجري والميلادي:** عرض مزدوج للتاريخ في رأس الشاشة.
-- **فهرس التوكيلات:** جدول منظم لبيانات التوكيلات وأرقامها ومكاتب التوثيق.
-- **أوراق المحضرين:** تتبع أوراق التكليف والإعلان وتواريخ الجلسات المرتبطة بها.
-- **الأعمال الإدارية:** قائمة مهام وملاحظات إدارية قابلة للتتبع.
-- **البيانات الشخصية:** صفحة مخصصة لبيانات المحامي ومكتبه.
-- **واجهة عربية بالكامل (RTL):** مصممة لتعمل باللغة العربية كلغة أساسية مع خطوط عربية احترافية (Cairo/Amiri).
+[Primary Flutter Agenda](https://github.com/matef-hub/agenda) · [Developer](https://github.com/matef-hub)
 
-## 🏗️ البنية التقنية
+## Scope
 
-يعتمد المشروع على بنية نظيفة مبسطة (Clean Architecture Lite):
+This is an **experimental workspace**, not the confirmed production release. It contains both `lib/` (Flutter) and `src/` (Vite/React); they should be built and assessed separately. The intended experience is an Arabic RTL judicial diary for hearings, powers of attorney and office tasks.
 
-- **Framework:** Flutter 3.47+ / Dart 3.13+
-- **State Management:** Provider
-- **Database:** SQLite (sqflite) للتخزين المحلي الآمن.
-- **Architecture:** Feature-first
-  - \lib/core/\: الثيم، الألوان، قاعدة البيانات، والأدوات المساعدة.
-  - \lib/features/\: كل ميزة تحتوي على (data, presentation, logic).
+| Interface | Stack | Local command |
+|:--|:--|:--|
+| Flutter | Dart + Flutter | `flutter pub get && flutter run` |
+| UI preview | React + TypeScript + Vite | `npm install && npm run dev` |
 
-## 🚀 البدء
+```mermaid
+flowchart LR
+  A["Judicial agenda needs"] --> F["Flutter mobile"]
+  A --> W["React UI preview"]
+  F --> T["Test real workflows"]
+  W --> T
+```
 
-### المتطلبات المسبقة
-- Flutter SDK (Stable Channel)
-- Android Studio أو VS Code
-- جهاز محاكاة أو جهاز حقيقي
+## Quality notes
 
-### التثبيت
+- Layout mockups are not evidence of finished persistence, authentication or synchronization.
+- The previous README contained broken Markdown code fences and a placeholder clone URL; the actual repository address is `https://github.com/matef-hub/Agenda-new`.
+- Use synthetic data for screenshots and design previews. Real client information belongs in protected systems.
 
-1. استنسخ المستودع:
-   \\ash
-   git clone <repository-url>
-   cd agenda
-   \
-2. ثبّت المكتبات:
-   \\ash
-   flutter pub get
-   \
-3. شغّل التطبيق:
-   \\ash
-   flutter run
-   \
-## 📂 هيكل المشروع
-
-\\	ext
-lib/
-├── core/
-│   ├── database/      # إعدادات SQLite والجداول
-│   ├── theme/         # الألوان والثيم المخصص للأجندة
-│   └── utils/         # أدوات التاريخ والتنسيق
-├── features/
-│   ├── daily_schedule/    # الجلسات اليومية
-│   ├── personal_data/     # بيانات المحامي
-│   ├── powers_of_attorney/# التوكيلات
-│   ├── bailiffs/          # أوراق المحضرين
-│   └── admin_work/        # الأعمال الإدارية
-└── main.dart              # نقطة الدخول وإعداد الـ Providers
-\
-## 🎨 الهوية البصرية
-
-تم اختيار لوحة الألوان بعناية لتعكس طبيعة المهنة والتراث القضائي المصري:
-- **الزيتي الأساسي (#3E5228):** يرمز للوقار والسلطة القضائية.
-- **الذهبي الثانوي (#C5A059):** للعناوين والحدود المهمة.
-- **الكريمي للخلفية (#FDFBF7):** لمحاكاة ورق الأجندات القديمة وتقليل إجهاد العين.
-
-## 📄 الرخصة
-
-جميع الحقوق محفوظة © 2026. هذا المشروع مخصص للاستخدام الشخصي والمهني.
+**Maintained by [Mohamed Atef](https://github.com/matef-hub)** · Egyptian lawyer and legal-tech developer.
